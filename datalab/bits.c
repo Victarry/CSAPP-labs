@@ -143,18 +143,22 @@ NOTES:
  *   Rating: 1
  */
 int bitXor(int x, int y) {
-  return 2;
+  // a ^ b = (~a&b) | (a&~b)
+  // a | b = ~(~a & ~b)
+  int a = (~x) & y;
+  int b = x & (~y);
+  int ans = ~(~a & ~b);
+  return ans;
 }
 /* 
- * tmin - return minimum two's complement integer 
+ * tmin - return minimum two's complement integer
  *   Legal ops: ! ~ & ^ | + << >>
  *   Max ops: 4
  *   Rating: 1
  */
 int tmin(void) {
-
-  return 2;
-
+  int ans = 1 << 31;
+  return ans;
 }
 //2
 /*
@@ -165,7 +169,11 @@ int tmin(void) {
  *   Rating: 1
  */
 int isTmax(int x) {
-  return 2;
+  // x = -1 may also matches
+  // Tmax = 0111;
+  int y = x + 1; // 1000;
+  int z = x + y; // 1111;
+  return (!(z+1)) & (!!(x+1));
 }
 /* 
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
@@ -175,8 +183,11 @@ int isTmax(int x) {
  *   Max ops: 12
  *   Rating: 2
  */
+//  Think: how to get 0xAA 0xAA00 0xAA0000 0xAA000000
 int allOddBits(int x) {
-  return 2;
+  int y = 0xAA;
+  int z = y | (y << 8) | (y << 16) | (y << 24);
+  return !((z & x) ^ z);
 }
 /* 
  * negate - return -x 
@@ -185,8 +196,9 @@ int allOddBits(int x) {
  *   Max ops: 5
  *   Rating: 2
  */
+// Think: x + (~x) = -1 -> ~x + 1 = -1
 int negate(int x) {
-  return 2;
+  return ~x + 1;
 }
 //3
 /* 
@@ -198,8 +210,11 @@ int negate(int x) {
  *   Max ops: 15
  *   Rating: 3
  */
+//  Think: x - 0x30 >= 0 & x-0x39-1 < 0
 int isAsciiDigit(int x) {
-  return 2;
+  int flag1 = x + (~0x30+1);
+  int flag2 = x + ~0x39;
+  return !(flag1 >> 31) & !!(flag2 >> 31);
 }
 /* 
  * conditional - same as x ? y : z 
@@ -209,7 +224,9 @@ int isAsciiDigit(int x) {
  *   Rating: 3
  */
 int conditional(int x, int y, int z) {
-  return 2;
+  int a = !x; // 0 or 1
+  int m = ~a + 1; // 0 or FFFFFFFFF
+  return (m & z) | (~m & y);
 }
 /* 
  * isLessOrEqual - if x <= y  then return 1, else return 0 
@@ -218,8 +235,14 @@ int conditional(int x, int y, int z) {
  *   Max ops: 24
  *   Rating: 3
  */
+// x <=y -> y-x >= 0
+// sign_x == sign_y
+// sign_x != sign_y
 int isLessOrEqual(int x, int y) {
-  return 2;
+  int sign = y + (~x+1); // 0
+  int sign_x = (x >> 31) & 1;
+  int sign_y = (y >> 31) & 1; 
+  return (!(sign_x ^ sign_y) & !(sign >> 31)) | ((sign_x ^ sign_y) & sign_x); //
 }
 //4
 /* 
@@ -230,14 +253,18 @@ int isLessOrEqual(int x, int y) {
  *   Max ops: 12
  *   Rating: 4 
  */
+//  Thinks: It's easy to check negative, zero is not positive nor negative
 int logicalNeg(int x) {
-  return 2;
+  int is_neg = (x >> 31) & 1;
+  int neg_x = ~x+1;
+  int is_pos = (neg_x >> 31) & 1;
+  return (~(is_neg | is_pos)) & 1;
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
  *  Examples: howManyBits(12) = 5
  *            howManyBits(298) = 10
- *            howManyBits(-5) = 4
+ *            howManyBits(-5) = 4 ？
  *            howManyBits(0)  = 1
  *            howManyBits(-1) = 1
  *            howManyBits(0x80000000) = 32
@@ -245,8 +272,46 @@ int logicalNeg(int x) {
  *  Max ops: 90
  *  Rating: 4
  */
+//  Think: 如何把3 -> 0111, 然后
 int howManyBits(int x) {
-  return 0;
+
+    /*
+     * We first bit invert all negative numbers and
+     * use binary search to find out the log2(n).
+     * Then we add 1 to the final result since we need
+     * the MSB to represent the sign.
+     * Note: finding the following things are equal:
+     * 1. find the most significant bit of 1 for positive numbers
+     * 2. find the most significant bit of 0 for negative numbers
+     */
+    // 如果|x| = |y|, x是负数, -x - 1所需的bits和y一样
+    /* I hate this, but I have to avoid parse error */
+    int sign, bit0, bit1, bit2, bit4, bit8, bit16;
+
+    sign = x >> 31; // make positive to 0x0000, make negative to 0xFFFF
+    
+    /* Bit invert x as needed */
+    x = (sign & ~x) | (~sign & x);
+    
+    /* Binary Search on bit level */
+    bit16 = !!(x >> 16) << 4; // if x > 2^16, x /= 2*16
+    x = x >> bit16;
+    
+    bit8 = !!(x >> 8) << 3;
+    x = x >> bit8;
+    
+    bit4 = !!(x >> 4) << 2;
+    x = x >> bit4;
+    
+    bit2 = !!(x >> 2) << 1;
+    x = x >> bit2;
+    
+    bit1 = !!(x >> 1);
+    x = x >> bit1;
+    
+    bit0 = x;
+
+    return bit16 + bit8 + bit4 + bit2 + bit1 + bit0 + 1;
 }
 //float
 /* 
@@ -261,7 +326,24 @@ int howManyBits(int x) {
  *   Rating: 4
  */
 unsigned floatScale2(unsigned uf) {
-  return 2;
+  // 幂全1
+  if( ((uf >> 23) & 0xFF) == 0xFF )
+  {
+    return uf;
+  }
+  if (uf == 0)
+  {
+    return uf;
+  }
+  // 非规格化数
+  if (((uf >> 23) & 0xFF) == 0)
+  {
+    return (uf & 0xF0000000) | (uf << 1);
+  }
+
+  // 幂全0
+  return uf + (1 << 23);
+  // 非规格化数 * 2
 }
 /* 
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -276,8 +358,47 @@ unsigned floatScale2(unsigned uf) {
  *   Rating: 4
  */
 int floatFloat2Int(unsigned uf) {
-  return 2;
+  int exp = (uf >> 23 & 0xFF) - 127;
+  int m = (0x7fffff & uf) + (1 << 23);
+  int sign = uf >> 31 & 1;
+  int shift = exp - 23;
+  // smaller than 1
+  if(exp < 0)
+  {
+    return 0;
+  }
+  // NaN or inf
+  if(exp >= 31)
+  {
+    return 0x80000000u;
+  }
+  // normal
+  if (shift > 0)
+  {
+    m = m << shift;
+    // overflow
+    if (m & (0x7FFFFF) == 0)
+    {
+      return 0x80000000;
+    }
+    else
+    {
+      if (sign == 1)
+        return ~m + 1;
+      else
+        return m;
+    }
+  }
+  else
+  {
+    m = m >> (-shift);
+    if (sign == 1)
+      return ~m + 1;
+    else
+      return m;
+  }
 }
+
 /* 
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
  *   (2.0 raised to the power x) for any 32-bit integer x.
@@ -292,5 +413,22 @@ int floatFloat2Int(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+  int inf = 0x7f800000;
+  int bias = 127;
+  int min_e = 23;
+  int ans;
+  int e = x + bias;
+  if ( x > 127)
+  {
+    ans = inf;
+  }
+  else if ( x < (-bias - min_e))
+  {
+    ans = 0;
+  }
+  else if (e >= 0)
+    ans = e << 23;
+  else
+    ans = 1 << (23 + e);
+  return ans;
 }
